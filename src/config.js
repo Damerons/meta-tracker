@@ -1,3 +1,4 @@
+// Updated order-confirmed mappings
 export const SITE_CONFIG = {
   siteId: "open-science-museum",
 
