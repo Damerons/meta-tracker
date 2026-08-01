@@ -13,13 +13,20 @@ const CORS_BASE_HEADERS = {
 function getCorsHeaders(request) {
   const origin = request.headers.get("Origin");
 
-  // Server-to-server requests and direct tests may not contain Origin.
+  // Server-to-server requests may not contain Origin.
   if (!origin) {
     return {};
   }
 
   try {
     const originUrl = new URL(origin);
+    const workerUrl = new URL(request.url);
+
+    // Permit same-origin testing from the Worker's own URL.
+    if (originUrl.origin === workerUrl.origin) {
+      return {};
+    }
+
     const siteMatch = resolveSiteHost(originUrl.hostname);
 
     if (!siteMatch.matched) {
