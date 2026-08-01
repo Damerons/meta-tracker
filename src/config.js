@@ -1,21 +1,22 @@
 export const SITE_CONFIG = {
   siteId: "open-science-museum",
 
-  // Standard hostname used for genuine aliases of the same website.
+  // The hostname that legitimate aliases/subdomains are normalized to.
   canonicalHost: "opensciencemuseum.org",
 
-  // Add every real production hostname that displays the same website.
+  // Every production hostname allowed to send events.
   allowedHosts: [
     "opensciencemuseum.org",
-    "www.luminresearch.shop",
+    "www.opensciencemuseum.org",
     "luminresearch.shop",
+    "www.luminresearch.shop",
 
-    // Add your exact legitimate subdomains below:
+    // Add additional legitimate subdomains here:
     // "shop.opensciencemuseum.org",
     // "us.opensciencemuseum.org",
   ],
 
-  // Staging hosts are accepted but marked as test traffic.
+  // Staging domains are accepted but marked as test traffic.
   stagingHosts: [
     // "staging.opensciencemuseum.org",
   ],
@@ -23,12 +24,33 @@ export const SITE_CONFIG = {
   preserveOriginalUrl: true,
 };
 
+/*
+ * Maps a page path on a legitimate alias/subdomain
+ * to the corresponding canonical page path.
+ *
+ * Example:
+ * store.opensciencemuseum.org/shop/microscope
+ * becomes:
+ * opensciencemuseum.org/products/measurement
+ */
+export const PATH_MAPPINGS = {
+  "/shop/microscope": "/products/measurement",
+
+  // Add additional mappings in this format:
+  // "/shop/old-page": "/products/new-page",
+  // "/store/micrographia": "/collection/micrographia",
+};
+
+/**
+ * Checks whether a hostname belongs to this configured website.
+ */
 export function resolveSiteHost(hostname) {
-  const host = hostname.toLowerCase();
+  const host = hostname.toLowerCase().replace(/\.$/, "");
 
   if (SITE_CONFIG.stagingHosts.includes(host)) {
     return {
       matched: true,
+      originalHost: host,
       canonicalHost: SITE_CONFIG.canonicalHost,
       environment: "staging",
       isTestEvent: true,
@@ -38,6 +60,7 @@ export function resolveSiteHost(hostname) {
   if (SITE_CONFIG.allowedHosts.includes(host)) {
     return {
       matched: true,
+      originalHost: host,
       canonicalHost: SITE_CONFIG.canonicalHost,
       environment: "production",
       isTestEvent: false,
@@ -46,6 +69,7 @@ export function resolveSiteHost(hostname) {
 
   return {
     matched: false,
+    originalHost: host,
     canonicalHost: null,
     environment: null,
     isTestEvent: false,

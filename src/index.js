@@ -1,6 +1,10 @@
-import { SITE_CONFIG, resolveSiteHost } from "./config.js";
+import {
+  SITE_CONFIG,
+  PATH_MAPPINGS,
+  resolveSiteHost,
+} from "./config.js";
 
-const CORS_BASE = {
+const CORS_BASE_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Max-Age": "86400",
@@ -9,7 +13,7 @@ const CORS_BASE = {
 function getCorsHeaders(request) {
   const origin = request.headers.get("Origin");
 
-  // Requests made directly, such as server-to-server tests, may have no Origin.
+  // Server-to-server requests and direct tests may not contain Origin.
   if (!origin) {
     return {};
   }
@@ -23,7 +27,7 @@ function getCorsHeaders(request) {
     }
 
     return {
-      ...CORS_BASE,
+      ...CORS_BASE_HEADERS,
       "Access-Control-Allow-Origin": origin,
       Vary: "Origin",
     };
@@ -43,12 +47,43 @@ function jsonResponse(data, status = 200, headers = {}) {
   });
 }
 
+function normalizePath(pathname) {
+  // Keep the homepage as "/".
+  if (!pathname || pathname === "/") {
+    return "/";
+  }
+
+  // Remove one or more trailing slashes.
+  return pathname.replace(/\/+$/, "");
+}
+
+function createCanonicalUrl(originalUrl, siteMatch) {
+  const canonicalUrl = new URL(originalUrl.toString());
+
+  // Change only the hostname.
+  canonicalUrl.hostname = siteMatch.canonicalHost;
+
+  const normalizedOriginalPath = normalizePath(originalUrl.pathname);
+
+  // Apply a configured path mapping when one exists.
+  // Otherwise preserve the same path without a trailing slash.
+  const mappedPath =
+    PATH_MAPPINGS[normalizedOriginalPath] || normalizedOriginalPath;
+
+  canonicalUrl.pathname = normalizePath(mappedPath);
+
+  return canonicalUrl;
+}
+
 export default {
   async fetch(request) {
     const requestUrl = new URL(request.url);
     const corsHeaders = getCorsHeaders(request);
 
-    // Block browser requests from domains not listed in config.js.
+    /*
+     * Reject browser requests from origins that are not listed
+     * in config.js.
+     */
     if (request.headers.has("Origin") && corsHeaders === null) {
       return jsonResponse(
         {
@@ -59,7 +94,9 @@ export default {
       );
     }
 
-    // Browser preflight request.
+    /*
+     * Browser CORS preflight.
+     */
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -67,7 +104,9 @@ export default {
       });
     }
 
-    // Health check.
+    /*
+     * Health endpoint.
+     */
     if (requestUrl.pathname === "/health") {
       return jsonResponse(
         {
@@ -82,7 +121,9 @@ export default {
       );
     }
 
-    // Event collector.
+    /*
+     * Tracking-event collector.
+     */
     if (requestUrl.pathname === "/collect") {
       if (request.method !== "POST") {
         return jsonResponse(
@@ -97,7 +138,7 @@ export default {
 
       const contentType = request.headers.get("Content-Type") || "";
 
-      if (!contentType.includes("application/json")) {
+      if (!contentType.toLowerCase().includes("application/json")) {
         return jsonResponse(
           {
             success: false,
@@ -123,7 +164,24 @@ export default {
         );
       }
 
-      const missingFields = ["event_name", "event_time", "url"].filter(
+      if (
+        !incomingEvent ||
+        typeof incomingEvent !== "object" ||
+        Array.isArray(incomingEvent)
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "Request body must contain a JSON object.",
+          },
+          400,
+          corsHeaders || {}
+        );
+      }
+
+      const requiredFields = ["event_name", "event_time", "url"];
+
+      const missingFields = requiredFields.filter(
         (field) =>
           incomingEvent[field] === undefined ||
           incomingEvent[field] === null ||
@@ -144,6 +202,7 @@ export default {
 
       if (
         typeof incomingEvent.event_name !== "string" ||
+        incomingEvent.event_name.trim().length === 0 ||
         incomingEvent.event_name.length > 100
       ) {
         return jsonResponse(
@@ -176,7 +235,7 @@ export default {
         originalUrl = new URL(incomingEvent.url);
 
         if (!["http:", "https:"].includes(originalUrl.protocol)) {
-          throw new Error("Unsupported protocol");
+          throw new Error("Unsupported URL protocol");
         }
       } catch {
         return jsonResponse(
@@ -191,7 +250,6 @@ export default {
 
       const siteMatch = resolveSiteHost(originalUrl.hostname);
 
-      // Prevent unrelated websites from being represented as this site.
       if (!siteMatch.matched) {
         return jsonResponse(
           {
@@ -204,10 +262,10 @@ export default {
         );
       }
 
-      // Preserve path, query parameters, and protocol.
-      // Only the genuine alias/subdomain hostname is canonicalized.
-      const canonicalUrl = new URL(originalUrl.toString());
-      canonicalUrl.hostname = siteMatch.canonicalHost;
+      const canonicalUrl = createCanonicalUrl(
+        originalUrl,
+        siteMatch
+      );
 
       const eventId =
         typeof incomingEvent.event_id === "string" &&
@@ -217,32 +275,53 @@ export default {
 
       const acceptedEvent = {
         ...incomingEvent,
+
+        event_name: incomingEvent.event_name.trim(),
         event_id: eventId,
         site_id: SITE_CONFIG.siteId,
+
+        // Exact URL where the event occurred.
         original_url: originalUrl.toString(),
+
+        // Normalized hostname and optional mapped path.
         canonical_url: canonicalUrl.toString(),
+
         environment: siteMatch.environment,
         test_event: siteMatch.isTestEvent,
+
         custom_data: {
           ...(incomingEvent.custom_data || {}),
           original_host: originalUrl.hostname,
+          original_path: originalUrl.pathname,
           canonical_host: siteMatch.canonicalHost,
+          canonical_path: canonicalUrl.pathname,
           environment: siteMatch.environment,
         },
+
         received_at: new Date().toISOString(),
       };
 
+      /*
+       * Safe debugging log. It intentionally avoids logging
+       * user_data or other potentially sensitive fields.
+       */
       console.log(
         JSON.stringify({
           event_id: acceptedEvent.event_id,
           event_name: acceptedEvent.event_name,
           original_host: originalUrl.hostname,
-          canonical_host: siteMatch.canonicalHost,
-          environment: siteMatch.environment,
+          original_path: originalUrl.pathname,
+          canonical_host: canonicalUrl.hostname,
+          canonical_path: canonicalUrl.pathname,
+          environment: acceptedEvent.environment,
           received_at: acceptedEvent.received_at,
         })
       );
 
+      /*
+       * Meta forwarding will be added later.
+       * For now, this endpoint only validates and normalizes.
+       */
       return jsonResponse(
         {
           success: true,
@@ -259,6 +338,9 @@ export default {
       );
     }
 
+    /*
+     * Root endpoint.
+     */
     return jsonResponse(
       {
         success: true,
