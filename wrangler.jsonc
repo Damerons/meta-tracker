@@ -3,6 +3,12 @@
   "main": "src/index.js",
   "compatibility_date": "2026-08-01",
   "keep_vars": true,
+
+  "vars": {
+    "META_PIXEL_ID": "1475945377308143",
+    "META_TEST_EVENT_CODE": "TEST36095"
+  },
+
   "observability": {
     "enabled": true
   }
