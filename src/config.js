@@ -55,6 +55,7 @@ export const PATH_MAPPINGS = {
   "/products/glp2-tz": "/shop/optical-resolution-test-slide-set/",
   "/products/glp1-sm": "/shop/historical-microscopy-observation-kit/",
   "/checkout/order-recieved": "/thank-you",
+  "/privacy-policy": "/privacy",
 
 
   // Add additional mappings in this format:
