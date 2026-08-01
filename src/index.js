@@ -385,14 +385,15 @@ return jsonResponse(
         metaResult.response?.messages ?? [],
     },
   },
-  202,
+ 202,
   corsHeaders || {}
 );
+}
 
-    /*
-     * Root endpoint.
-     */
-    return jsonResponse(
+/*
+ * Root endpoint.
+ */
+return jsonResponse(
       {
         success: true,
         service: "meta-tracker",
