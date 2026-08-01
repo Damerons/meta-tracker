@@ -1,39 +1,88 @@
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+import { SITE_CONFIG, resolveSiteHost } from "./config.js";
+
+const CORS_BASE = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Max-Age": "86400",
 };
 
-function jsonResponse(data, status = 200) {
-  return Response.json(data, {
+function getCorsHeaders(request) {
+  const origin = request.headers.get("Origin");
+
+  // Requests made directly, such as server-to-server tests, may have no Origin.
+  if (!origin) {
+    return {};
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    const siteMatch = resolveSiteHost(originUrl.hostname);
+
+    if (!siteMatch.matched) {
+      return null;
+    }
+
+    return {
+      ...CORS_BASE,
+      "Access-Control-Allow-Origin": origin,
+      Vary: "Origin",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function jsonResponse(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: CORS_HEADERS,
+    headers: {
+      "Content-Type": "application/json; charset=UTF-8",
+      "Cache-Control": "no-store",
+      ...headers,
+    },
   });
 }
 
 export default {
   async fetch(request) {
     const requestUrl = new URL(request.url);
+    const corsHeaders = getCorsHeaders(request);
 
-    // Browser preflight request
+    // Block browser requests from domains not listed in config.js.
+    if (request.headers.has("Origin") && corsHeaders === null) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Origin is not authorized.",
+        },
+        403
+      );
+    }
+
+    // Browser preflight request.
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: CORS_HEADERS,
+        headers: corsHeaders || {},
       });
     }
 
-    // Health check
+    // Health check.
     if (requestUrl.pathname === "/health") {
-      return jsonResponse({
-        success: true,
-        service: "meta-tracker",
-        status: "healthy",
-      });
+      return jsonResponse(
+        {
+          success: true,
+          service: "meta-tracker",
+          site_id: SITE_CONFIG.siteId,
+          canonical_host: SITE_CONFIG.canonicalHost,
+          status: "healthy",
+        },
+        200,
+        corsHeaders || {}
+      );
     }
 
-    // Tracking-event collector
+    // Event collector.
     if (requestUrl.pathname === "/collect") {
       if (request.method !== "POST") {
         return jsonResponse(
@@ -41,11 +90,12 @@ export default {
             success: false,
             error: "Method not allowed. Send a POST request.",
           },
-          405
+          405,
+          corsHeaders || {}
         );
       }
 
-      const contentType = request.headers.get("content-type") || "";
+      const contentType = request.headers.get("Content-Type") || "";
 
       if (!contentType.includes("application/json")) {
         return jsonResponse(
@@ -53,7 +103,8 @@ export default {
             success: false,
             error: "Content-Type must be application/json.",
           },
-          415
+          415,
+          corsHeaders || {}
         );
       }
 
@@ -67,13 +118,12 @@ export default {
             success: false,
             error: "Request body contains invalid JSON.",
           },
-          400
+          400,
+          corsHeaders || {}
         );
       }
 
-      const requiredFields = ["event_name", "event_time", "url"];
-
-      const missingFields = requiredFields.filter(
+      const missingFields = ["event_name", "event_time", "url"].filter(
         (field) =>
           incomingEvent[field] === undefined ||
           incomingEvent[field] === null ||
@@ -87,7 +137,36 @@ export default {
             error: "Required fields are missing.",
             missing_fields: missingFields,
           },
-          400
+          400,
+          corsHeaders || {}
+        );
+      }
+
+      if (
+        typeof incomingEvent.event_name !== "string" ||
+        incomingEvent.event_name.length > 100
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "event_name must be a valid string.",
+          },
+          400,
+          corsHeaders || {}
+        );
+      }
+
+      if (
+        typeof incomingEvent.event_time !== "number" ||
+        !Number.isFinite(incomingEvent.event_time)
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "event_time must be a Unix timestamp number.",
+          },
+          400,
+          corsHeaders || {}
         );
       }
 
@@ -97,44 +176,69 @@ export default {
         originalUrl = new URL(incomingEvent.url);
 
         if (!["http:", "https:"].includes(originalUrl.protocol)) {
-          throw new Error("Unsupported URL protocol");
+          throw new Error("Unsupported protocol");
         }
       } catch {
         return jsonResponse(
           {
             success: false,
-            error: "The url field must contain a valid HTTP or HTTPS URL.",
+            error: "url must contain a valid HTTP or HTTPS URL.",
           },
-          400
+          400,
+          corsHeaders || {}
         );
       }
 
+      const siteMatch = resolveSiteHost(originalUrl.hostname);
+
+      // Prevent unrelated websites from being represented as this site.
+      if (!siteMatch.matched) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "The event URL hostname is not configured.",
+            received_host: originalUrl.hostname,
+          },
+          403,
+          corsHeaders || {}
+        );
+      }
+
+      // Preserve path, query parameters, and protocol.
+      // Only the genuine alias/subdomain hostname is canonicalized.
+      const canonicalUrl = new URL(originalUrl.toString());
+      canonicalUrl.hostname = siteMatch.canonicalHost;
+
       const eventId =
         typeof incomingEvent.event_id === "string" &&
-        incomingEvent.event_id.length > 0
-          ? incomingEvent.event_id
+        incomingEvent.event_id.trim().length > 0
+          ? incomingEvent.event_id.trim()
           : crypto.randomUUID();
 
       const acceptedEvent = {
         ...incomingEvent,
-
         event_id: eventId,
-
-        // Always retain the real URL where the event occurred.
-        original_url: incomingEvent.url,
-
-        // This remains unchanged until legitimate mapping rules are added.
-        canonical_url: incomingEvent.url,
-
+        site_id: SITE_CONFIG.siteId,
+        original_url: originalUrl.toString(),
+        canonical_url: canonicalUrl.toString(),
+        environment: siteMatch.environment,
+        test_event: siteMatch.isTestEvent,
+        custom_data: {
+          ...(incomingEvent.custom_data || {}),
+          original_host: originalUrl.hostname,
+          canonical_host: siteMatch.canonicalHost,
+          environment: siteMatch.environment,
+        },
         received_at: new Date().toISOString(),
       };
 
-      // Log only non-sensitive debugging information.
       console.log(
         JSON.stringify({
           event_id: acceptedEvent.event_id,
           event_name: acceptedEvent.event_name,
-          source_host: originalUrl.hostname,
+          original_host: originalUrl.hostname,
+          canonical_host: siteMatch.canonicalHost,
+          environment: siteMatch.environment,
           received_at: acceptedEvent.received_at,
         })
       );
@@ -147,20 +251,28 @@ export default {
           event_name: acceptedEvent.event_name,
           original_url: acceptedEvent.original_url,
           canonical_url: acceptedEvent.canonical_url,
+          environment: acceptedEvent.environment,
+          test_event: acceptedEvent.test_event,
         },
-        202
+        202,
+        corsHeaders || {}
       );
     }
 
-    // Root endpoint
-    return jsonResponse({
-      success: true,
-      service: "meta-tracker",
-      message: "Meta Tracker Worker is running",
-      endpoints: {
-        health: "GET /health",
-        collect: "POST /collect",
+    return jsonResponse(
+      {
+        success: true,
+        service: "meta-tracker",
+        site_id: SITE_CONFIG.siteId,
+        canonical_host: SITE_CONFIG.canonicalHost,
+        message: "Meta Tracker Worker is running",
+        endpoints: {
+          health: "GET /health",
+          collect: "POST /collect",
+        },
       },
-    });
+      200,
+      corsHeaders || {}
+    );
   },
 };
