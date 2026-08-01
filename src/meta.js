@@ -17,11 +17,6 @@ function buildCustomData(event) {
   const allowedFields = [
     "value",
     "currency",
-    "content_ids",
-    "contents",
-    "content_type",
-    "content_name",
-    "content_category",
     "num_items",
     "order_id",
     "search_string",
