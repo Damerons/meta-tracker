@@ -3,6 +3,7 @@ import {
   PATH_MAPPINGS,
   resolveSiteHost,
 } from "./config.js";
+import { sendToMeta } from "./meta.js";
 
 const CORS_BASE_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -83,7 +84,7 @@ function createCanonicalUrl(originalUrl, siteMatch) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const requestUrl = new URL(request.url);
     const corsHeaders = getCorsHeaders(request);
 
@@ -326,24 +327,67 @@ export default {
       );
 
       /*
-       * Meta forwarding will be added later.
-       * For now, this endpoint only validates and normalizes.
-       */
-      return jsonResponse(
-        {
-          success: true,
-          accepted: true,
-          event_id: acceptedEvent.event_id,
-          event_name: acceptedEvent.event_name,
-          original_url: acceptedEvent.original_url,
-          canonical_url: acceptedEvent.canonical_url,
-          environment: acceptedEvent.environment,
-          test_event: acceptedEvent.test_event,
-        },
-        202,
-        corsHeaders || {}
-      );
-    }
+ * Forward the validated event to Meta CAPI.
+ * During testing, META_TEST_EVENT_CODE routes it to Test Events.
+ */
+let metaResult;
+
+try {
+  metaResult = await sendToMeta(
+    acceptedEvent,
+    request,
+    env
+  );
+} catch (error) {
+  console.error(
+    JSON.stringify({
+      destination: "meta",
+      event_id: acceptedEvent.event_id,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown Meta delivery error",
+    })
+  );
+
+  return jsonResponse(
+    {
+      success: false,
+      accepted: true,
+      delivered_to_meta: false,
+      event_id: acceptedEvent.event_id,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Meta delivery failed.",
+    },
+    502,
+    corsHeaders || {}
+  );
+}
+
+return jsonResponse(
+  {
+    success: true,
+    accepted: true,
+    delivered_to_meta: true,
+    event_id: acceptedEvent.event_id,
+    event_name: acceptedEvent.event_name,
+    original_url: acceptedEvent.original_url,
+    canonical_url: acceptedEvent.canonical_url,
+    environment: acceptedEvent.environment,
+    test_event: acceptedEvent.test_event,
+    meta: {
+      status: metaResult.status,
+      events_received:
+        metaResult.response?.events_received ?? null,
+      messages:
+        metaResult.response?.messages ?? [],
+    },
+  },
+  202,
+  corsHeaders || {}
+);
 
     /*
      * Root endpoint.
