@@ -34,7 +34,25 @@ export const SITE_CONFIG = {
  * opensciencemuseum.org/products/measurement
  */
 export const PATH_MAPPINGS = {
-  "/shop/microscope": "/products/measurement",
+  "/products/bac-water": "/shop/microscope-measurement-reference-cards/",
+  "/products/pt-141": "/shop/prepared-microscopy-slide-collection/",
+  "/products/tesamorelin": "/shop/historical-microscopy-observation-kit/",
+  "/products/ipamorelin": "/shop/microscope-measurement-starter-set/",
+  "/products/wolverine": "/shop/advanced-botanical-materials-slide-collection/",
+  "/products/klow": "/shop/complete-microscope-calibration-observation-set/",
+  "/products/kpv": "/shop/optical-resolution-test-slide-set/",
+  "/products/glow": "/shop/advanced-botanical-materials-slide-collection/",
+  "/products/ghk-cu": "/shop/prepared-microscopy-slide-collection/",
+  "/products/tb-500": "/shop/microscope-measurement-starter-set/",
+  "/products/bpc-157": "/shop/prepared-microscopy-slide-collection/",
+  "/products/ss-31": "/shop/prepared-microscopy-slide-collection/",
+  "/products/mots-c": "/shop/stage-micrometer-calibration-slide/",
+  "/products/nad": "/shop/stage-micrometer-calibration-slide/",
+  "/products/aod-9604": "/shop/prepared-microscopy-slide-collection/",
+  "/products/glp3-rt": "/shop/advanced-botanical-materials-slide-collection/",
+  "/products/glp2-tz": "/shop/optical-resolution-test-slide-set/",
+  "/products/glp1-sm": "/shop/historical-microscopy-observation-kit/",
+
 
   // Add additional mappings in this format:
   // "/shop/old-page": "/products/new-page",
