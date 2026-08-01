@@ -130,25 +130,6 @@ function buildUserData(event, request) {
   );
 }
 
-  /*
-   * Meta browser identifiers may be supplied by the website tracker.
-   */
-  if (typeof incoming.fbp === "string" && incoming.fbp.trim()) {
-    userData.fbp = incoming.fbp.trim();
-  }
-
-  if (typeof incoming.fbc === "string" && incoming.fbc.trim()) {
-    userData.fbc = incoming.fbc.trim();
-  }
-
-  /*
-   * Remove undefined values before sending.
-   */
-  return Object.fromEntries(
-    Object.entries(userData).filter(([, value]) => value !== undefined)
-  );
-}
-
 export async function sendToMeta(event, request, env) {
   if (!env.META_PIXEL_ID) {
     throw new Error("META_PIXEL_ID is not configured.");
