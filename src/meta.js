@@ -42,6 +42,35 @@ function buildCustomData(event) {
   return customData;
 }
 
+function cleanString(value) {
+  return (
+    typeof value === "string" &&
+    value.trim()
+  )
+    ? value.trim()
+    : undefined;
+}
+
+function cleanHashArray(value) {
+  const values =
+    Array.isArray(value) ? value : [value];
+
+  const validHashes = values
+    .filter(
+      (item) => typeof item === "string"
+    )
+    .map(
+      (item) => item.trim().toLowerCase()
+    )
+    .filter(
+      (item) => /^[0-9a-f]{64}$/.test(item)
+    );
+
+  return validHashes.length > 0
+    ? validHashes
+    : undefined;
+}
+
 function buildUserData(event, request) {
   const incoming =
     event.user_data &&
@@ -52,15 +81,54 @@ function buildUserData(event, request) {
 
   const userData = {
     client_user_agent:
-      incoming.client_user_agent ||
-      request.headers.get("User-Agent") ||
-      undefined,
+      cleanString(
+        incoming.client_user_agent
+      ) ||
+      cleanString(
+        request.headers.get("User-Agent")
+      ),
 
     client_ip_address:
-      incoming.client_ip_address ||
-      request.headers.get("CF-Connecting-IP") ||
-      undefined,
+      cleanString(
+        incoming.client_ip_address
+      ) ||
+      cleanString(
+        request.headers.get(
+          "CF-Connecting-IP"
+        )
+      ),
+
+    fbp: cleanString(incoming.fbp),
+    fbc: cleanString(incoming.fbc),
   };
+
+  const hashedFields = [
+    "em",
+    "ph",
+    "fn",
+    "ln",
+    "ct",
+    "st",
+    "zp",
+    "country",
+    "external_id",
+  ];
+
+  for (const field of hashedFields) {
+    const hashes =
+      cleanHashArray(incoming[field]);
+
+    if (hashes) {
+      userData[field] = hashes;
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(userData).filter(
+      ([, value]) => value !== undefined
+    )
+  );
+}
 
   /*
    * Meta browser identifiers may be supplied by the website tracker.
