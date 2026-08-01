@@ -379,11 +379,13 @@ return jsonResponse(
     test_event: acceptedEvent.test_event,
     meta: {
       status: metaResult.status,
-      events_received:
-        metaResult.response?.events_received ?? null,
-      messages:
-        metaResult.response?.messages ?? [],
-    },
+  events_received:
+    metaResult.response?.events_received ?? null,
+  messages:
+    metaResult.response?.messages ?? [],
+  test_event_code_applied:
+    metaResult.test_event_code_applied,
+},
   },
  202,
   corsHeaders || {}

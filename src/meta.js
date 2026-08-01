@@ -184,9 +184,10 @@ export async function sendToMeta(event, request, env) {
     })
   );
 
-  return {
-    success: true,
-    status: response.status,
-    response: responseBody,
-  };
+ return {
+  success: true,
+  status: response.status,
+  response: responseBody,
+  test_event_code_applied: Boolean(payload.test_event_code),
+};
 }
