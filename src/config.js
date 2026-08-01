@@ -10,6 +10,8 @@ export const SITE_CONFIG = {
     "www.opensciencemuseum.org",
     "luminresearch.shop",
     "www.luminresearch.shop",
+    "shop.luminresearch.shop",
+    "www.shop.luminresearch.shop",
 
     // Add additional legitimate subdomains here:
     // "shop.opensciencemuseum.org",
