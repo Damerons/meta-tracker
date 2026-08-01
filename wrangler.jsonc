@@ -2,6 +2,7 @@
   "name": "tracker",
   "main": "src/index.js",
   "compatibility_date": "2026-08-01",
+  "keep_vars": true,
   "observability": {
     "enabled": true
   }
