@@ -13,7 +13,10 @@ export const SITE_CONFIG = {
     "www.luminresearch.shop",
     "shop.luminresearch.shop",
     "www.shop.luminresearch.shop",
-
+    "lumingrade.com",
+    "www.lumingrade.com",
+    "luminstandard.com",
+    "www.luminstandard.com",
     // Add additional legitimate subdomains here:
     // "shop.opensciencemuseum.org",
     // "us.opensciencemuseum.org",
@@ -55,7 +58,7 @@ export const PATH_MAPPINGS = {
   "/products/glp3-rt": "/shop/advanced-botanical-materials-slide-collection/",
   "/products/glp2-tz": "/shop/optical-resolution-test-slide-set/",
   "/products/glp1-sm": "/shop/historical-microscopy-observation-kit/",
-  "/checkout/order-recieved": "/thank-you",
+  "/checkout/order-received": "/thank-you",
   "/order-confirmed": "/thank-you",
   "/order-confirmed/thank-you-page-2": "/thank-you",
   "/privacy-policy": "/privacy",
